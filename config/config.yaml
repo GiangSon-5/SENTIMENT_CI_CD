@@ -1,0 +1,15 @@
+data:
+  raw_path: "data/raw/sentiment_data.csv"
+  processed_path: "data/processed"
+  test_size: 0.2
+  random_state: 42
+
+train:
+  model_path: "models/model.pkl"
+  vectorizer_path: "models/vectorizer.pkl"
+  max_features: 5000
+  C: 1.0  # Tham số cho Logistic Regression
+
+mlflow:
+  experiment_name: "Sentiment_Analysis_Exp"
+  artifact_path: "sentiment_model"
