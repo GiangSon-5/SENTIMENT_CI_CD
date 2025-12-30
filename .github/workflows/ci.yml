@@ -1,19 +1,19 @@
-name: Professional MLOps Pipeline
+# .github/workflows/ci.yml
+
+name: Professional Local Pipeline
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
 permissions:
   contents: read
-  packages: write # Cần quyền ghi vào GHCR
+  packages: write
 
 jobs:
-  # JOB 1: TEST & TRAIN
-  train-and-test:
-    runs-on: ubuntu-latest
+  train-and-deploy:
+    runs-on: self-hosted # Chạy trên máy bạn (WSL)
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -22,71 +22,59 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-          cache: 'pip' # Cache lại pip để chạy nhanh hơn lần sau
+          cache: 'pip'
 
       - name: Install Dependencies
-        run: |
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
-      - name: Run Data Pipeline & Train
+      - name: Train Model
         run: |
-          # 1. Tạo dữ liệu
+          # Chạy code train
           python src/ingest.py
-          # 2. Xử lý
           python src/preprocess.py
-          # 3. Train & Log (File model sẽ được lưu vào folder models/)
           python src/train.py
+          # Kết quả train xong đang nằm ở folder ./models (trong thư mục tạm của Runner)
+
+      # --- [SỬA ĐƯỜNG DẪN TẠI ĐÂY] ---
+      - name: Deploy Model to Project Folder
+        run: |
+          echo "🚀 Copying model to local project folder..."
           
-      - name: Run Unit Tests
-        run: pytest tests/
+          # Định nghĩa thư mục đích là đường dẫn thật trên máy bạn
+          TARGET_DIR="/mnt/c/Users/Admin/Desktop/sentiment_ci_cd/models"
+          
+          # Tạo thư mục nếu chưa có
+          mkdir -p $TARGET_DIR
+          
+          # Copy đè file mới vào (Force copy)
+          cp -f models/model.pkl $TARGET_DIR/
+          cp -f models/vectorizer.pkl $TARGET_DIR/
+          
+          echo "✅ Đã cập nhật model mới tại: $TARGET_DIR"
 
-      # --- BƯỚC QUAN TRỌNG: UPLOAD MODEL ARTIFACT ---
-      # Lưu file model đã train lên kho tạm của GitHub để Job sau dùng
-      - name: Upload Model Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: trained-model-artifacts
-          path: |
-            models/model.pkl
-            models/vectorizer.pkl
-          retention-days: 1 # Chỉ giữ 1 ngày cho đỡ tốn dung lượng
-
-  # JOB 2: BUILD DOCKER & PUSH
-  build-push-docker:
-    needs: train-and-test
-    runs-on: ubuntu-latest
+  build-docker:
+    needs: train-and-deploy
+    runs-on: self-hosted
     if: github.ref == 'refs/heads/main'
-
+    
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Download Model Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: trained-model-artifacts
-          path: models/
-
-      - name: Login to GitHub Container Registry
+      - name: Login to GHCR
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- [BƯỚC MỚI THÊM VÀO] ---
-      # Chuyển tên Repo thành chữ thường và lưu vào biến môi trường REPO_NAME
       - name: Downcase REPO
-        run: |
-          echo "REPO_NAME=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
 
-      # --- [SỬA ĐOẠN NÀY] ---
-      # Thay ${{ github.repository }} bằng ${{ env.REPO_NAME }}
-      - name: Build and Push Docker Image
+      # Build Docker (Lưu ý: Image này sẽ RỖNG phần models)
+      - name: Build and Push
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: |
-            ghcr.io/${{ env.REPO_NAME }}/sentiment-api:latest
-            ghcr.io/${{ env.REPO_NAME }}/sentiment-api:${{ github.sha }}
+          tags: ghcr.io/${{ env.REPO_NAME }}/sentiment-api:latest
