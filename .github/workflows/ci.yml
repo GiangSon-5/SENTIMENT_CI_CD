@@ -1,4 +1,4 @@
-name: MLops Sentiment Pipeline
+name: Professional MLOps Pipeline
 
 on:
   push:
@@ -8,62 +8,83 @@ on:
 
 permissions:
   contents: read
-  packages: write  # Cần quyền này để push lên GHCR
+  packages: write # Cần quyền ghi vào GHCR
 
 jobs:
-  build-and-test:
+  # JOB 1: TEST & TRAIN
+  train-and-test:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip' # Cache lại pip để chạy nhanh hơn lần sau
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
 
-    - name: Run Tests
-      run: |
-        # Chạy Ingest và Preprocess giả lập để có data cho test
-        python src/ingest.py
-        python src/preprocess.py
-        python src/train.py  # Train để sinh ra model.pkl cho API test
-        pytest tests/
+      - name: Run Data Pipeline & Train
+        run: |
+          # 1. Tạo dữ liệu
+          python src/ingest.py
+          # 2. Xử lý
+          python src/preprocess.py
+          # 3. Train & Log (File model sẽ được lưu vào folder models/)
+          python src/train.py
+          
+      - name: Run Unit Tests
+        run: pytest tests/
 
+      # --- BƯỚC QUAN TRỌNG: UPLOAD MODEL ARTIFACT ---
+      # Lưu file model đã train lên kho tạm của GitHub để Job sau dùng
+      - name: Upload Model Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model-artifacts
+          path: |
+            models/model.pkl
+            models/vectorizer.pkl
+          retention-days: 1 # Chỉ giữ 1 ngày cho đỡ tốn dung lượng
+
+  # JOB 2: BUILD DOCKER & PUSH
   build-push-docker:
-    needs: build-and-test
+    needs: train-and-test # Bắt buộc phải đợi Job trên xong mới chạy
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' # Chỉ chạy khi push vào main
-    
+    if: github.ref == 'refs/heads/main' # Chỉ chạy khi merge vào main
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    # Chúng ta cần train lại để có model đưa vào Docker image
-    # (Cách tốt hơn là lưu model từ job trước vào Artifacts, rồi download ở job này)
-    - name: Set up Python & Train Model (For Docker Build)
-      run: |
-        pip install -r requirements.txt
-        python src/ingest.py
-        python src/preprocess.py
-        python src/train.py
+      # --- BƯỚC QUAN TRỌNG: DOWNLOAD MODEL ARTIFACT ---
+      # Tải file model từ Job trên về đúng thư mục models/
+      - name: Download Model Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: trained-model-artifacts
+          path: models/
 
-    - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v2
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify Model Exists
+        run: ls -la models/ # Kiểm tra xem đã tải về chưa
 
-    - name: Build and Push Docker image
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/${{ github.repository }}/sentiment-api:latest
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v4
+        with:
+          context: . # Docker sẽ COPY models/ (vừa tải về) vào trong image
+          push: true
+          # Gắn tag version theo Commit SHA (ngắn) để dễ rollback
+          tags: |
+            ghcr.io/${{ github.repository }}/sentiment-api:latest
+            ghcr.io/${{ github.repository }}/sentiment-api:${{ github.sha }}
