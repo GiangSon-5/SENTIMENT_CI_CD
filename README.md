@@ -115,7 +115,49 @@ Dữ liệu mẫu nằm trong `data/raw/sentiment_data.csv` (dạng CSV). Hệ t
 
 ---
 
-## 🛠️ 4. Công cụ sử dụng
+OK 👍 mình viết lại **phiên bản GỌN – ĐÚNG REPORT – KHÔNG DÀI DÒNG**, **chỉ hướng dẫn tạo thư mục & chạy**, **không giải thích lan man**.
+Bạn **copy nguyên khối này dán vào report** là ổn.
+
+---
+
+# 🧩  Project Setup & Run Instructions
+
+---
+
+## 🧩  Khởi tạo cấu trúc dự án
+
+```bash
+# Tạo folder cha
+mkdir SENTIMENT_CI_CD
+cd SENTIMENT_CI_CD
+```
+
+```bash
+# Tạo thư mục
+mkdir -p data/raw data/processed src api models config tests .github/workflows
+
+# Tạo file source code
+touch src/__init__.py src/ingest.py src/preprocess.py src/train.py \
+      src/evaluate.py src/inference.py
+
+# Tạo file API
+touch api/__init__.py api/app.py
+
+# Tạo file config & CI/CD
+touch config/config.yaml
+touch .github/workflows/ci.yml
+
+# Tạo file test
+touch tests/__init__.py tests/test_preprocess.py tests/test_api.py
+
+# Tạo file cấu hình khác
+touch Dockerfile docker-compose.yaml requirements.txt
+```
+
+
+---
+
+## 🛠️  Công cụ sử dụng
 
 | Công cụ | Phiên bản | Vai trò |
 |---------|---------|--------|
@@ -132,33 +174,9 @@ Dữ liệu mẫu nằm trong `data/raw/sentiment_data.csv` (dạng CSV). Hệ t
 
 ### **Thư viện bổ trợ:**
 - `httpx==0.24.1` — Test API (async HTTP client)
-- `joblib==1.3.2` — Serialization tối ưu
-- `python-dotenv==1.0.0` — Quản lý environment variables
 
----
 
-## 🧭 5. Hướng tiếp cận
-
-**📌 Chiến lược:**
-Sử dụng **Supervised Learning truyền thống** (TF-IDF + LogisticRegression):
-1. **Vectorize text** bằng TF-IDF weights (biểu diễn đặc trưng của từng từ)
-2. **Huấn luyện classifier** tuyến tính (LogisticRegression) để tách Positive/Negative
-3. **Dự đoán nhãn** và confidence dựa trên probability estimates
-
-**✅ Lý do chọn:**
-- ✨ **Đơn giản & hiệu quả**: TF-IDF + LogisticRegression là gold standard cho text classification nhị phân
-- ⚡ **Nhanh**: Không cần GPU, huấn luyện trong vài giây
-- 📊 **Interpretable**: Có thể xem được feature weights để hiểu mô hình dự đoán như thế nào
-- 🔄 **Maintain dễ**: Ít dependencies, dễ reproduce, dễ debug
-- 🚀 **Production-ready**: Có thể deploy nhanh chóng trên bất kỳ server nào
-
-**Lựa chọn thay thế (nếu cần):**
-- Fine-tune BERT/DistilBERT nếu cần accuracy cao hơn (tradeoff: chậm hơn, resource-heavy)
-- Ensemble multiple models (Random Forest + LogisticRegression) nếu cần robustness
-
----
-
-## ✅ 6. Kết quả
+## ✅  Kết quả
 
 ### **📈 Tóm tắt kết quả đạt được:**
 1. ✅ **Pipeline CI/CD hoàn chỉnh**:
@@ -183,33 +201,50 @@ Sử dụng **Supervised Learning truyền thống** (TF-IDF + LogisticRegressio
    - Commit hash + timestamp in run names for traceability
 
 ### **📝 Kết quả chi tiết (cập nhật sau mỗi training run):**
-Xem chi tiết metrics trong `mlruns/` hoặc qua MLflow UI:
-```
-mlruns/
-  └── 570618477003345757/  # Experiment ID
-      └── <run-id>/
-          ├── metrics/
-          │   ├── accuracy     # Test accuracy
-          │   └── f1_score     # Test F1 (weighted)
-          ├── params/
-          │   ├── C            # Regularization param
-          │   └── model_type   # LogisticRegression
-          └── artifacts/
-              └── model/       # MLflow model format
-```
-
-### **📌 Trạng thái hiện tại:**
-- ✨ **Status**: Stable & deployable
-- 🔄 **Last updated**: (Sẽ cập nhật theo thời gian thực mỗi run)
-- 📊 **Model performance**: Chưa có baseline cụ thể; mục tiêu đạt accuracy > 0.85 trên test set
-
-### **🎯 Hướng cải thiện tương lai:**
-- 🔹 Mở rộng dataset để tăng accuracy
-- 🔹 Thử fine-tuning BERT nếu cần precision cao
-- 🔹 Thêm monitoring/alerting cho production predictions
-- 🔹 Implement model retraining schedule (weekly/monthly)
+Xem chi tiết metrics trong `mlruns/` hoặc qua MLflow UI
 
 ---
 
-**Generated**: 2025-12-30  
-**Last Modified**: (Auto-update after each CI run)
+
+## 🧩 Chạy hệ thống bằng Docker (Production)
+
+### (Tùy chọn) Login GitHub Container Registry (GHCR)
+
+```bash
+echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io \
+  -u GiangSon-5 --password-stdin
+```
+
+*(Bỏ qua bước này nếu repository ở chế độ public)*
+
+### Chạy container API
+
+```bash
+docker run -d \
+  -p 8000:8000 \
+  --name sentiment-api-prod \
+  -v /mnt/c/Users/Admin/Desktop/sentiment_ci_cd/models:/app/models \
+  ghcr.io/giangson-5/sentiment_ci_cd/sentiment-api:latest
+```
+
+---
+
+## 🧩 Kiểm tra API inference
+
+Sau khi container chạy thành công, gửi request dự đoán sentiment bằng `curl`:
+
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I really love this product"}'
+```
+
+API trả về kết quả gồm:
+
+* Nhãn cảm xúc (Positive / Negative)
+* Confidence score của dự đoán
+
+
+
+
+
