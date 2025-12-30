@@ -39,7 +39,7 @@ def preprocess():
     os.makedirs(config['data']['processed_path'], exist_ok=True)
     os.makedirs(os.path.dirname(config['train']['vectorizer_path']), exist_ok=True)
 
-    # Save vectorizer (QUAN TRỌNG: để dùng cho inference sau này)
+    # Save vectorizer 
     with open(config['train']['vectorizer_path'], "wb") as f:
         pickle.dump(vectorizer, f)
     

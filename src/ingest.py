@@ -10,8 +10,6 @@ def ingest_data():
     raw_path = config['data']['raw_path']
     os.makedirs(os.path.dirname(raw_path), exist_ok=True)
     
-    # Ở thực tế: Code này sẽ tải từ Kaggle hoặc S3
-    # Ở đây: Chúng ta tạo dataset giả lập nhỏ để demo CI/CD nhanh
     print("🚀 Creating dummy dataset...")
     data = {
         "text": [
@@ -23,7 +21,7 @@ def ingest_data():
             "Worst purchase ever!",
             "Highly recommended!",
             "Not bad, but could be better."
-        ] * 50, # Nhân bản lên 400 dòng
+        ] * 50, 
         "target": [1, 0, 1, 0, 0, 0, 1, 0] * 50 # 1: Positive, 0: Negative
     }
     

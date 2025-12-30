@@ -1,5 +1,3 @@
-# .github/workflows/ci.yml
-
 name: Professional Local Pipeline
 
 on:
@@ -12,7 +10,7 @@ permissions:
 
 jobs:
   train-and-deploy:
-    runs-on: self-hosted # Chạy trên máy bạn (WSL)
+    runs-on: self-hosted # Chạy trên máy (WSL)
     
     steps:
       - name: Checkout Code
@@ -28,29 +26,35 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Train Model
+        env:
+          # Truyền mã Commit vào cho Python đọc để đặt tên Run
+          GITHUB_SHA: ${{ github.sha }}
         run: |
-          # Chạy code train
           python src/ingest.py
           python src/preprocess.py
           python src/train.py
-          # Kết quả train xong đang nằm ở folder ./models (trong thư mục tạm của Runner)
 
-      # --- [SỬA ĐƯỜNG DẪN TẠI ĐÂY] ---
-      - name: Deploy Model to Project Folder
+      - name: Deploy Model and MLflow Data
         run: |
-          echo "🚀 Copying model to local project folder..."
+          echo "🚀 Syncing artifacts to local project folder..."
           
-          # Định nghĩa thư mục đích là đường dẫn thật trên máy bạn
-          TARGET_DIR="/mnt/c/Users/Admin/Desktop/sentiment_ci_cd/models"
+          # Đổi TARGET_DIR thành thư mục gốc dự án
+          PROJECT_ROOT="/mnt/c/Users/Admin/Desktop/sentiment_ci_cd"
           
-          # Tạo thư mục nếu chưa có
-          mkdir -p $TARGET_DIR
+          # 1. Cập nhật Model (Ghi đè bản cũ để API chạy bản mới nhất)
+          mkdir -p $PROJECT_ROOT/models
+          cp -f models/model.pkl $PROJECT_ROOT/models/
+          cp -f models/vectorizer.pkl $PROJECT_ROOT/models/
           
-          # Copy đè file mới vào (Force copy)
-          cp -f models/model.pkl $TARGET_DIR/
-          cp -f models/vectorizer.pkl $TARGET_DIR/
+          # 2. Cập nhật MLflow (Quan trọng: GỘP dữ liệu, không xóa cũ)
+          if [ -d "mlruns" ]; then
+            echo "Found new mlruns data. Merging..."
+            mkdir -p $PROJECT_ROOT/mlruns
+            # Copy đệ quy tất cả các run mới về
+            cp -rf mlruns/* $PROJECT_ROOT/mlruns/
+          fi
           
-          echo "✅ Đã cập nhật model mới tại: $TARGET_DIR"
+          echo "✅ Đã đồng bộ Model và History về: $PROJECT_ROOT"
 
   build-docker:
     needs: train-and-deploy
@@ -71,7 +75,6 @@ jobs:
       - name: Downcase REPO
         run: echo "REPO_NAME=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
 
-      # Build Docker (Lưu ý: Image này sẽ RỖNG phần models)
       - name: Build and Push
         uses: docker/build-push-action@v4
         with:

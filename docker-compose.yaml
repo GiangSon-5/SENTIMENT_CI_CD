@@ -1,14 +1,24 @@
-version: '3.8'
 services:
   api:
-    build: .
+    # Ưu tiên dùng Image từ GHCR để giống môi trường Production
+    # Nhớ thay bằng username thật của bạn nếu khác
+    image: ghcr.io/giangson-5/sentiment_ci_cd/sentiment-api:latest
+    container_name: sentiment-api
     ports:
       - "8000:8000"
     volumes:
-      - ./models:/app/models # Mount model để không phải train lại nếu có sẵn
+      # Map model để API chạy
+      - ./models:/app/models 
+    restart: always
   
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.7.1
+    container_name: sentiment-mlflow
     ports:
       - "5000:5000"
-    command: mlflow ui --host 0.0.0.0
+    # Lệnh chỉ định backend là file
+    command: mlflow ui --host 0.0.0.0 --backend-store-uri file:///app/mlruns
+    volumes:
+      # Map folder mlruns để Web hiển thị biểu đồ
+      - ./mlruns:/app/mlruns
+    restart: always

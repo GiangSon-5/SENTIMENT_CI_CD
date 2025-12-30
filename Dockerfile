@@ -11,14 +11,11 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 2. Copy Code (Chỉ copy src, api, config)
+# 2. Copy Code 
 COPY ./src ./src
 COPY ./api ./api
 COPY ./config ./config
 
-# --- [QUAN TRỌNG] ---
-# KHÔNG COPY models ở đây nữa (vì mình muốn tách data ra ngoài)
-# Thay vào đó, tạo một thư mục RỖNG tên là models
 RUN mkdir -p /app/models
 
 # 3. User & Permission
