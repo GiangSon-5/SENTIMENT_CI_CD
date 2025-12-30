@@ -53,24 +53,19 @@ jobs:
 
   # JOB 2: BUILD DOCKER & PUSH
   build-push-docker:
-    needs: train-and-test # Bắt buộc phải đợi Job trên xong mới chạy
+    needs: train-and-test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' # Chỉ chạy khi merge vào main
+    if: github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      # --- BƯỚC QUAN TRỌNG: DOWNLOAD MODEL ARTIFACT ---
-      # Tải file model từ Job trên về đúng thư mục models/
       - name: Download Model Artifacts
         uses: actions/download-artifact@v4
         with:
           name: trained-model-artifacts
           path: models/
-
-      - name: Verify Model Exists
-        run: ls -la models/ # Kiểm tra xem đã tải về chưa
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v2
@@ -79,12 +74,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # --- [BƯỚC MỚI THÊM VÀO] ---
+      # Chuyển tên Repo thành chữ thường và lưu vào biến môi trường REPO_NAME
+      - name: Downcase REPO
+        run: |
+          echo "REPO_NAME=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+
+      # --- [SỬA ĐOẠN NÀY] ---
+      # Thay ${{ github.repository }} bằng ${{ env.REPO_NAME }}
       - name: Build and Push Docker Image
         uses: docker/build-push-action@v4
         with:
-          context: . # Docker sẽ COPY models/ (vừa tải về) vào trong image
+          context: .
           push: true
-          # Gắn tag version theo Commit SHA (ngắn) để dễ rollback
           tags: |
-            ghcr.io/${{ github.repository }}/sentiment-api:latest
-            ghcr.io/${{ github.repository }}/sentiment-api:${{ github.sha }}
+            ghcr.io/${{ env.REPO_NAME }}/sentiment-api:latest
+            ghcr.io/${{ env.REPO_NAME }}/sentiment-api:${{ github.sha }}
